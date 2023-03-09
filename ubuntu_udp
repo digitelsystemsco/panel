@@ -101,6 +101,44 @@ install_sudo(){
   }&>/dev/null
 }
 
+install_squid(){
+clear
+echo 'Installing proxy.'
+{
+sudo apt install -y squid
+cd /etc/squid/
+rm squid.conf
+echo "acl SSH dst `ip route get 8.8.8.8 | awk '/src/ {f=NR} f&&NR-1==f' RS=" "`" >> squid.conf
+echo 'acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 21
+acl Safe_ports port 443
+acl Safe_ports port 70
+acl Safe_ports port 210
+acl Safe_ports port 1025-65535
+acl Safe_ports port 280
+acl Safe_ports port 488
+acl Safe_ports port 591
+acl Safe_ports port 777
+acl CONNECT method CONNECT
+http_access allow SSH
+http_access deny all
+http_port 8080
+http_port 8181
+http_port 9090
+coredump_dir /var/spool/squid3
+refresh_pattern ^ftp: 1440 20% 10080
+refresh_pattern ^gopher: 1440 0% 1440
+refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
+refresh_pattern . 0 20% 4320
+visible_hostname KobZ-Proxy' >> squid.conf
+
+service squid restart
+cd /etc || exit
+}
+}
+
+
 install_rclocal(){
   {  
   
@@ -156,5 +194,6 @@ install_hysteria
 install_letsencrypt
 install_firewall_kvm
 modify_hysteria
+install_squid
 install_rclocal
 start_service
