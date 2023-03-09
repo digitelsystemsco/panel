@@ -49,10 +49,10 @@ echo '{
   "up_mbps": 100,
   "down_mbps": 100,
   "disable_udp": false,
-  "obfs": "firenet",
+  "obfs": "digitel",
   "auth": {
     "mode": "passwords",
-    "config": ["firenetdev1", "firenetdev2"]
+    "config": ["digitelsystem", "firenetdev"]
   }
 }
 ' >> /etc/hysteria/config.json
@@ -72,7 +72,7 @@ apt remove apache2 -y
 domain=$(cat /root/domain)
 curl  https://get.acme.sh | sh
 ~/.acme.sh/acme.sh --register-account -m ${CF_ID} --server zerossl
-~/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
+~/.acme.sh/acme.sh --issue -d ${domain} --standalone -k ec-256
 ~/.acme.sh/acme.sh --installcert -d ${domain} --fullchainpath /etc/hysteria/hysteria.crt --keypath /etc/hysteria/hysteria.key --ecc
 }
 }
